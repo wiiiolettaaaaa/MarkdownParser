@@ -1,0 +1,3 @@
+redis>=4.0.0   # optional, only if you use Redis backend
+prometheus_client>=0.16.0  # optional, if you enable Prometheus metrics
+pytest>=7.0
