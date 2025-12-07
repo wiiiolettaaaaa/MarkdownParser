@@ -3,8 +3,8 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass
 
 # Імпортуємо лексер і AST-вузли
-from lexer import Token, TokenType, Lexer
-from ast_nodes import (
+from mdparser.markdown_parser.lexer import Token, TokenType, Lexer
+from mdparser.markdown_parser.ast_nodes import (
     Document, Heading, Paragraph, Text, Bold, Italic, Link, ListBlock,
     ListItem, CodeBlock, CodeSpan, BlockQuote, HorizontalRule, mk_paragraph
 )
@@ -60,6 +60,25 @@ class Parser:
         tokens = self.lexer.tokenize()
         self.tokens = TokenStream(tokens)
 
+    def _is_hr_line(self) -> bool:
+        """
+        Перевіряє, чи поточна лінія — горизонтальна лінія (--- або ***).
+        """
+        count_dash = 0
+        count_star = 0
+        pos = self.tokens.pos
+        while not self.tokens.eof() and self.tokens.peek().type in (TokenType.DASH, TokenType.STAR):
+            tok = self.tokens.next()
+            if tok.type == TokenType.DASH:
+                count_dash += 1
+            elif tok.type == TokenType.STAR:
+                count_star += 1
+
+        # HR мінімум 3 символи одного типу
+        if count_dash >= 3 or count_star >= 3:
+            return True
+        self.tokens.pos = pos  # відкотимо позицію, якщо це не HR
+        return False
     # -------------------------------------------------------
     # Верхній рівень: parse whole document
     # -------------------------------------------------------
@@ -204,31 +223,44 @@ class Parser:
     # Our lexer currently includes '>' inside TEXT tokens; handle both cases.
     # -------------------------------------------------------
     def parse_blockquote(self) -> BlockQuote:
-        children: List = []
-        # Accept multiple consecutive lines starting with '>'
+        children = []
+
         while not self.tokens.eof():
+            # Перевіряємо, чи рядок починається з '>'
             tok = self.tokens.peek()
-            if tok.type == TokenType.TEXT and tok.value.startswith('>'):
-                # consume this token and remove leading '>'
+
+            # Якщо токен не TEXT або не починається з >
+            if tok.type != TokenType.TEXT or not tok.value.startswith('>'):
+                break
+
+            # Беремо токен і рухаємося далі
+            line = tok.value
+            self.tokens.next()
+
+            # Вирізаємо ">" та пробіл
+            line = line[1:]
+            if line.startswith(" "):
+                line = line[1:]
+
+            inlines = [Text(line)]
+
+            while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
                 t = self.tokens.next()
-                rest = t.value.lstrip('> ')
-                # rest may be empty -> just continue
-                # parse inline content from rest string by invoking a sub-parser
-                sub_parser = Parser(rest)
-                # parse paragraph from remainder (we expect single paragraph)
-                sub_doc = sub_parser.parse()
-                # append blocks from sub-doc into blockquote children
-                children.extend(sub_doc.blocks)
-                # if next token is NEWLINE, consume and proceed
-                if self.tokens.match(TokenType.NEWLINE):
-                    self.tokens.next()
-                continue
-            elif tok.type == TokenType.NEWLINE:
-                # end of blockquote if blank line
-                break
-            else:
-                break
+                if t.type == TokenType.TEXT or t.type == TokenType.SPACE:
+                    inlines.append(Text(t.value))
+                else:
+                    break
+
+            if self.tokens.match(TokenType.NEWLINE):
+                self.tokens.next()
+
+            inlines = [t for t in inlines if not (isinstance(t, Text) and t.text.strip() == "")]
+
+            children.append(Paragraph(inlines=inlines))
+
         return BlockQuote(children=children)
+
+
 
     # -------------------------------------------------------
     # Parse lists (ordered and unordered). Handles consecutive list items.

@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Optional, Any
 import html as html_module
 import json
-from ast_nodes import (
+from mdparser.markdown_parser.ast_nodes import (
     Document, Paragraph, Heading, Text, Bold, Italic, Link,
     ListBlock, ListItem, CodeBlock, CodeSpan, BlockQuote, HorizontalRule,
     Visitor, Node
@@ -192,14 +192,16 @@ class PlainTextRenderer(BaseRenderer):
             self._parts.append("\n")
 
     def visit_paragraph(self, node: Paragraph):
-        text = ''.join(self._render_inlines(node.inlines))
-        self._parts.append(text)
-        self._parts.append("\n")
+        for inline in node.inlines:
+            inline.accept(self)
+        self._parts.append("\n\n")
 
     def visit_heading(self, node: Heading):
         hashes = "#" * node.level
-        text = ''.join(self._render_inlines(node.inlines))
-        self._parts.append(f"{hashes} {text}\n")
+        self._parts.append(hashes + " ")
+        for inline in node.inlines:
+            inline.accept(self)
+        self._parts.append("\n\n")
 
     def visit_text(self, node: Text):
         self._parts.append(node.text)
@@ -217,8 +219,14 @@ class PlainTextRenderer(BaseRenderer):
         self._parts.append("*")
 
     def visit_link(self, node: Link):
-        text = ''.join(self._render_inlines(node.text_nodes))
-        self._parts.append(f"[{text}]({node.url})")
+        text = []
+        for i in node.text_nodes:
+            if isinstance(i, Text):
+                text.append(i.text)
+            else:
+                i.accept(self)
+        text_str = ''.join(text)
+        self._parts.append(f"[{text_str}]({node.url})")
 
     def visit_list(self, node: ListBlock):
         for i, it in enumerate(node.items, start=1):
@@ -226,26 +234,25 @@ class PlainTextRenderer(BaseRenderer):
                 prefix = f"{i}. "
             else:
                 prefix = "- "
-            # render item
             self._parts.append(prefix)
-            # each item may contain paragraphs; render first paragraph inline
+
+            # items usually contain a Paragraph
             if it.children:
                 first = it.children[0]
                 if isinstance(first, Paragraph):
-                    self._parts.append(''.join(self._render_inlines(first.inlines)))
+                    for inl in first.inlines:
+                        inl.accept(self)
                 else:
-                    self._parts.append(str(first))
+                    first.accept(self)
+
             self._parts.append("\n")
 
     def visit_list_item(self, node: ListItem):
-        # handled in visit_list
-        pass
+        pass  # handled in visit_list
 
     def visit_codeblock(self, node: CodeBlock):
-        self._parts.append("```")
-        if node.language:
-            self._parts.append(node.language)
-        self._parts.append("\n")
+        lang = node.language or ""
+        self._parts.append("```" + lang + "\n")
         self._parts.append(node.code)
         self._parts.append("\n```\n")
 
@@ -258,9 +265,10 @@ class PlainTextRenderer(BaseRenderer):
         for c in node.children:
             self._parts.append("> ")
             if isinstance(c, Paragraph):
-                self._parts.append(''.join(self._render_inlines(c.inlines)))
+                for inl in c.inlines:
+                    inl.accept(self)
             else:
-                self._parts.append(str(c))
+                c.accept(self)
             self._parts.append("\n")
 
     def visit_hr(self, node: HorizontalRule):
