@@ -8,7 +8,9 @@ from mdparser.markdown_parser.lexer import Token, TokenType
 from mdparser.markdown_parser.ast_nodes import (
     Document, Heading, Paragraph, Text, Bold, Italic,
     Link, ListBlock, ListItem, CodeBlock, CodeSpan,
-    BlockQuote, HorizontalRule
+    BlockQuote, HorizontalRule,
+    mk_text, mk_bold, mk_italic, mk_link, mk_paragraph, mk_heading, mk_codeblock, mk_list,
+    _node_from_dict
 )
 
 # ----------------------------------------------------------
@@ -234,3 +236,76 @@ Paragraph text
     assert isinstance(doc.blocks[1], Paragraph)
     assert isinstance(doc.blocks[2], BlockQuote)
     assert isinstance(doc.blocks[3], ListBlock)
+
+def test_text_to_from_dict():
+    t = Text("hello")
+    d = t.to_dict()
+    t2 = Text.from_dict(d)
+    assert t2.text == "hello"
+
+def test_bold_to_from_dict():
+    b = Bold([Text("x"), Italic([Text("y")])])
+    d = b.to_dict()
+    b2 = Bold.from_dict(d)
+    assert isinstance(b2.children[0], Text)
+    assert b2.children[0].text == "x"
+    assert isinstance(b2.children[1], Italic)
+    assert b2.children[1].children[0].text == "y"
+
+def test_link_to_from_dict():
+    l = Link([Text("txt")], url="u", title="t")
+    d = l.to_dict()
+    l2 = Link.from_dict(d)
+    assert l2.url == "u"
+    assert l2.title == "t"
+    assert l2.text_nodes[0].text == "txt"
+
+
+def test_document_to_from_dict():
+    doc = Document(blocks=[Paragraph([Text("x")]), Heading(2, [Text("h")])])
+    d = doc.to_dict()
+    doc2 = Document.from_dict(d)
+    assert len(doc2.blocks) == 2
+    assert isinstance(doc2.blocks[0], Paragraph)
+    assert doc2.blocks[0].inlines[0].text == "x"
+    assert isinstance(doc2.blocks[1], Heading)
+    assert doc2.blocks[1].level == 2
+
+def test_listblock_to_from_dict():
+    item1 = ListItem([Paragraph([Text("a")])])
+    item2 = ListItem([Paragraph([Text("b")])])
+    lst = ListBlock([item1, item2], ordered=True)
+    d = lst.to_dict()
+    lst2 = ListBlock.from_dict(d)
+    assert lst2.ordered is True
+    assert len(lst2.items) == 2
+    assert lst2.items[0].children[0].inlines[0].text == "a"
+
+def test_mk_helpers():
+    t = mk_text("x")
+    b = mk_bold(t)
+    i = mk_italic(t)
+    l = mk_link("url", t, title="t")
+    p = mk_paragraph(t, b)
+    h = mk_heading(1, t)
+    cb = mk_codeblock("code")
+    lst = mk_list(ListItem([p]), ordered=True)
+
+    assert isinstance(t, Text)
+    assert isinstance(b, Bold)
+    assert isinstance(i, Italic)
+    assert isinstance(l, Link)
+    assert isinstance(p, Paragraph)
+    assert isinstance(h, Heading)
+    assert isinstance(cb, CodeBlock)
+    assert isinstance(lst, ListBlock)
+
+import pytest
+
+def test_node_from_dict_unknown_type():
+    with pytest.raises(ValueError):
+        _node_from_dict({"type": "Unknown"})
+
+def test_node_from_dict_missing_type():
+    with pytest.raises(ValueError):
+        _node_from_dict({})

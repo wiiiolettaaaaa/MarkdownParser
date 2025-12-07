@@ -1,14 +1,19 @@
 import pytest
 from mdparser.markdown_parser.renderer import (
     HTMLRenderer, PlainTextRenderer, JSONRenderer,
-    render_html, render_text, render_json
+    render_html, render_text, render_json, BaseRenderer
 )
 from mdparser.markdown_parser.ast_nodes import (
     Document, Paragraph, Heading, Text, Bold, Italic, Link,
-    ListBlock, ListItem, CodeBlock, CodeSpan, BlockQuote, HorizontalRule
+    ListBlock, ListItem, CodeBlock, CodeSpan, BlockQuote, HorizontalRule, Node
 )
 
-
+def test_base_renderer_get_output_not_implemented():
+    class DummyRenderer(BaseRenderer):
+        pass
+    r = DummyRenderer()
+    with pytest.raises(NotImplementedError):
+        r.get_output()
 # -------------------------
 # Helper: build inline node
 # -------------------------
@@ -236,3 +241,36 @@ def test_json_indent_none(monkeypatch):
     doc = Document(blocks=[])
     out = render_json(doc, indent=None)
     assert out == '{"x": 2}'
+
+def test_html_list_item_nested_block():
+    doc = Document(blocks=[
+        ListBlock(ordered=False, items=[
+            ListItem(children=[
+                Paragraph(inlines=[T("p")]),
+                CodeBlock(code="x", language=None)
+            ])
+        ])
+    ])
+    out = render_html(doc, pretty=True)
+    # Перевіряємо, що <ul> і <li> з вкладеним <pre><code> присутні
+    assert "<ul>" in out
+    assert "<li>" in out
+    assert "<pre><code>x</code></pre>" in out
+    assert "</li>" in out
+    assert "</ul>" in out
+
+def test_plaintext_renderer_render_inlines_complex():
+    from mdparser.markdown_parser.renderer import PlainTextRenderer
+    bold = Bold(children=[T("B")])
+    italic = Italic(children=[T("I")])
+    link = Link(url="url", text_nodes=[T("L")])
+    inlines = [T("A"), bold, italic, link]
+    r = PlainTextRenderer()
+    out = r._render_inlines(inlines)
+    assert ''.join(out) == "ABIL"
+
+def test_json_renderer_no_indent(monkeypatch):
+    monkeypatch.setattr(Document, "to_dict", lambda self: {"key": "val"})
+    doc = Document(blocks=[])
+    out = render_json(doc, indent=None)
+    assert out == '{"key": "val"}'
