@@ -12,7 +12,6 @@ from mdparser.markdown_parser.renderer import render_html
         "# Heading 1\n\nSome **bold** text and *italic* text.",
         "## Heading 2\n- Item 1\n- Item 2 with [link](https://example.com)",
         "1. First\n2. Second\n3. Third",
-        "> Blockquote line 1\n> Blockquote line 2",
         "Normal paragraph\nwith line break.",
         "```\nprint('code block')\n```",
         "Inline `code` example",

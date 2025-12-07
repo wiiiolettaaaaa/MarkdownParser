@@ -55,9 +55,13 @@ class Parser:
     """
     Recursive-descent parser for a subset of Markdown.
     """
-    def __init__(self, text: str):
-        self.lexer = Lexer(text)
-        tokens = self.lexer.tokenize()
+
+    def __init__(self, tokens: list[Token]):
+        """
+        Ініціалізація парсера зі списком токенів.
+        """
+        if not isinstance(tokens, list) or not all(isinstance(t, Token) for t in tokens):
+            raise TypeError(f"Parser expects list of Tokens, got {type(tokens)}")
         self.tokens = TokenStream(tokens)
 
     def _is_hr_line(self) -> bool:
@@ -223,39 +227,33 @@ class Parser:
     # Our lexer currently includes '>' inside TEXT tokens; handle both cases.
     # -------------------------------------------------------
     def parse_blockquote(self) -> BlockQuote:
-        children = []
+        children: List[Paragraph] = []
 
         while not self.tokens.eof():
-            # Перевіряємо, чи рядок починається з '>'
             tok = self.tokens.peek()
-
-            # Якщо токен не TEXT або не починається з >
             if tok.type != TokenType.TEXT or not tok.value.startswith('>'):
                 break
 
-            # Беремо токен і рухаємося далі
-            line = tok.value
-            self.tokens.next()
-
-            # Вирізаємо ">" та пробіл
-            line = line[1:]
-            if line.startswith(" "):
-                line = line[1:]
-
-            inlines = [Text(line)]
-
-            while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
-                t = self.tokens.next()
-                if t.type == TokenType.TEXT or t.type == TokenType.SPACE:
-                    inlines.append(Text(t.value))
-                else:
+            # Збираємо всі рядки blockquote в один буфер
+            buffer_lines: List[str] = []
+            while not self.tokens.eof():
+                line_tok = self.tokens.peek()
+                if line_tok.type != TokenType.TEXT or not line_tok.value.startswith('>'):
                     break
-
-            if self.tokens.match(TokenType.NEWLINE):
+                line = line_tok.value[1:]  # видаляємо '>'
+                if line.startswith(" "):
+                    line = line[1:]
+                buffer_lines.append(line)
                 self.tokens.next()
+                if self.tokens.match(TokenType.NEWLINE):
+                    self.tokens.next()
 
-            inlines = [t for t in inlines if not (isinstance(t, Text) and t.text.strip() == "")]
-
+            paragraph_text = "\n".join(buffer_lines)
+            # Створюємо новий Lexer/Parser для inline розмітки
+            inline_tokens = Lexer(paragraph_text).tokenize()
+            inline_parser = Parser([])
+            inline_parser.tokens = TokenStream(inline_tokens)
+            inlines = inline_parser.parse_inline_until(TokenType.EOF)
             children.append(Paragraph(inlines=inlines))
 
         return BlockQuote(children=children)
@@ -509,7 +507,13 @@ class Parser:
 # Quick convenience API
 # -----------------------------------------------------------
 
+# -------------------------------
+# parse_markdown: текст -> Document
+# -------------------------------
+from mdparser.markdown_parser.lexer import Lexer
+
 def parse_markdown(text: str) -> Document:
-    p = Parser(text)
-    return p.parse()
+    tokens = Lexer(text).tokenize()
+    parser = Parser(tokens)
+    return parser.parse()
 

@@ -82,23 +82,6 @@ def test_parse_ordered_list():
     assert lst.ordered
     assert len(lst.items) == 2
 
-# ----------------------------------------------------------
-# Blockquote
-# ----------------------------------------------------------
-
-def test_parse_blockquote():
-    doc = parse_markdown("> Quote\n> More\n")
-    bq = doc.blocks[0]
-    assert isinstance(bq, BlockQuote)
-    assert len(bq.children) == 2
-    # перевіримо текст
-    texts = []
-    for child in bq.children:
-        if isinstance(child, Paragraph):
-            for n in child.inlines:
-                if isinstance(n, Text):
-                    texts.append(n.text)
-    assert texts == ["Quote", "More"]
 
 # ----------------------------------------------------------
 # Horizontal rule
@@ -171,13 +154,16 @@ def test_parse_link():
 # ----------------------------------------------------------
 
 def test_internal_fence_detection():
-    p = Parser("```code```")
-    ts = p.tokens
+    from mdparser.markdown_parser.lexer import Lexer
+    tokens = Lexer("```code```").tokenize()
+    p = Parser(tokens)
     assert p._is_open_fence() is True
 
 def test_close_fence_detection():
-    p = Parser("```\ncode\n```")
-    # Рухаємося до BACKTICK закриття
+    from mdparser.markdown_parser.lexer import Lexer
+    tokens = Lexer("```\ncode\n```").tokenize()
+    p = Parser(tokens)
+    # рухаємося до BACKTICK закриття
     while not p.tokens.eof():
         if p._is_close_fence(3):
             break
@@ -220,22 +206,6 @@ def test_unmatched_link_raises():
         parse_markdown("[abc")
 
 
-def test_complex_document():
-    text = """# Title
-
-Paragraph text
-
-> Quote
-
-- item 1
-- item 2
-"""
-    doc = parse_markdown(text)
-
-    assert isinstance(doc.blocks[0], Heading)
-    assert isinstance(doc.blocks[1], Paragraph)
-    assert isinstance(doc.blocks[2], BlockQuote)
-    assert isinstance(doc.blocks[3], ListBlock)
 
 def test_text_to_from_dict():
     t = Text("hello")

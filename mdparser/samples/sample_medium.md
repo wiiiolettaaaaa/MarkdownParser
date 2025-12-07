@@ -11,7 +11,7 @@ def f():
 *	list a
 *	list b
 
-## `samples/sample_large.md`
+## samples/sample_large.md
 (створіть шляхом дублювання medium багато разів; bench runner очікує .md файли)
 
 ---
