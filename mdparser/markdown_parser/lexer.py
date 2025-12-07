@@ -42,12 +42,15 @@ class Token:
 # -----------------------------------------------------------
 
 class Lexer:
+    """
+    Головний клас лексера.
+    Приймає Markdown-текст і повертає список токенів.
+    """
+
     def __init__(self, text: str):
-        if not isinstance(text, str):
-            raise TypeError(f"Lexer expects str, got {type(text)}: {repr(text)}")
         self.text = text
         self.pos = 0
-        self.length = len(text)   # <--- обов’язково, бо next_token його використовує
+        self.length = len(text)
 
     # -------------------------------------------------------
     # Основний метод
@@ -135,11 +138,7 @@ class Lexer:
             return Token(TokenType.RPAREN, ")", self.pos)
 
         # --- NUMBER LIST (e.g. "1.") ---
-        # --- NUMBER LIST (e.g. "1.") ---
-        number_match = None
-        if self.text is not None and self.pos < self.length:
-            number_match = re.match(r"\d+\.", self.text[self.pos:])
-
+        number_match = re.match(r"\d+\.", self.text[self.pos:])
         if number_match:
             value = number_match.group(0)
             self.pos += len(value)

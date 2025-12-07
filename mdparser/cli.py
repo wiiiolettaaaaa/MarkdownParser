@@ -81,11 +81,11 @@ def cmd_tokens(args):
 def cmd_parse(args):
     text = read_file(args.file)
     ast = parse_markdown(text)
-    from mdparser.markdown_parser.ast_nodes import ast_to_json
-    print(ast_to_json(ast))
+    print(ast.pretty())
 
 
 def cmd_ast(args):
+    # Alias for parse
     return cmd_parse(args)
 
 
