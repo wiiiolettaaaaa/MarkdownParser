@@ -1,14 +1,16 @@
 import pytest
 from hypothesis import given, strategies as st
 
-from mdparser.markdown_parser.parser import parse_markdown, Parser, ParseError
+from mdparser.markdown_parser.parser import parse_markdown, ParseError
 from mdparser.markdown_parser.renderer import HTMLRenderer
-from mdparser.markdown_parser.ast_nodes import Document
 
+# ============================================================
+# Hypothesis strategies
+# ============================================================
 
 markdown_chars = st.characters(
-    blacklist_categories=["Cs"],
-    blacklist_characters=["\x00"]
+    blacklist_categories=["Cs"],  # уникати сурогатних пар
+    blacklist_characters=["\x00"]  # null char
 )
 
 markdown_texts = st.text(
@@ -17,35 +19,18 @@ markdown_texts = st.text(
     max_size=300
 )
 
-
-# ============================================================
-# HELPER: parse safely (ParseError is normal!)
-# ============================================================
-
-def safe_parse(text):
-    """
-    Парсер може кинути ParseError — це нормальна поведінка.
-    Але він НЕ повинен кидати жодних інших виключень.
-    """
-    try:
-        return parse_markdown(text)
-    except ParseError:
-        # нормальна ситуація: Markdown некоректний
-        return None
-
-
 # ============================================================
 # TEST 1: parser must not crash unexpectedly
 # ============================================================
 
 @given(markdown_texts)
 def test_parser_does_not_crash(text):
-    """Парсер може викинути ParseError, але не має кидати інші виключення."""
-    try:
-        safe_parse(text)
-    except Exception:
-        pytest.fail(f"Parser crashed with unexpected error on: {text!r}")
-
+    """
+    Парсер повинен обробити будь-який текст.
+    ParseError — це допустима поведінка для некоректного Markdown.
+    Інші винятки — не допустимі.
+    """
+    parse_markdown(text)  # ParseError тут не ловимо, щоб Hypothesis показав приклад
 
 # ============================================================
 # TEST 2: HTML renderer must not crash after successful parse
@@ -53,16 +38,13 @@ def test_parser_does_not_crash(text):
 
 @given(markdown_texts)
 def test_html_renderer_does_not_crash(text):
-    ast = safe_parse(text)
-    if ast is None:
-        return  # некоректний markdown → рендер пропускаємо
-
-    try:
-        html = HTMLRenderer().render(ast)
-        assert isinstance(html, str)
-    except Exception:
-        pytest.fail("HTML renderer crashed unexpectedly.")
-
+    """
+    Рендерер HTML повинен коректно працювати на успішно розпарсеному AST.
+    ParseError не ловимо, бо це показує баги парсера.
+    """
+    ast = parse_markdown(text)  # може кинути ParseError → Hypothesis покаже приклад
+    html = HTMLRenderer().render(ast)
+    assert isinstance(html, str)
 
 # ============================================================
 # TEST 3: Idempotency for successful parses only
@@ -70,33 +52,26 @@ def test_html_renderer_does_not_crash(text):
 
 @given(markdown_texts)
 def test_parser_idempotent_with_html(text):
-    ast1 = safe_parse(text)
-    if ast1 is None:
-        return  # некоректний вхід — тест не застосовується
-
+    """
+    Парсер повинен коректно парсити HTML, отриманий від рендера AST.
+    ParseError сигналізує про баг у парсері.
+    """
+    ast1 = parse_markdown(text)
     renderer = HTMLRenderer()
     html = renderer.render(ast1)
 
-    try:
-        safe_parse(html)
-    except Exception:
-        pytest.fail("Idempotency test failed: HTML re-parse crashed unexpectedly.")
-
+    # Перепарсити згенерований HTML
+    parse_markdown(html)  # ParseError тут не ловимо
 
 # ============================================================
 # TEST 4: AST structure validation for successful parses only
 # ============================================================
 
 def validate_ast(node):
-    # Можна додати розширені перевірки, тут – базові
     assert node is not None
     assert hasattr(node, "__class__")
 
-
 @given(markdown_texts)
 def test_ast_structure_is_valid(text):
-    ast = safe_parse(text)
-    if ast is None:
-        return
-
+    ast = parse_markdown(text)
     validate_ast(ast)

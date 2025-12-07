@@ -22,6 +22,7 @@ class TokenType(Enum):
     DOUBLE_STAR = auto()        # "**" (жирний)
     BACKTICK = auto()           # ` (inline code)
     NUMBER = auto()             # 1. 2. 3.
+    DOT = auto()
     INDENT = auto()             # відступи
     SPACE = auto()              # ' '
 
@@ -76,6 +77,10 @@ class Lexer:
         if ch == "\n":
             self.pos += 1
             return Token(TokenType.NEWLINE, "\n", self.pos)
+
+        if ch == ".":
+            self.pos += 1
+            return Token(TokenType.DOT, ".", self.pos - 1)
 
         # --- SPACE / INDENT ---
         if ch == " ":
@@ -136,14 +141,18 @@ class Lexer:
 
         # --- NUMBER LIST (e.g. "1.") ---
         # --- NUMBER LIST (e.g. "1.") ---
-        number_match = None
-        if self.text is not None and self.pos < self.length:
-            number_match = re.match(r"\d+\.", self.text[self.pos:])
+        # --- NUMBER (e.g., "1") і DOT (".") для нумерованого списку ---
+        if self.text[self.pos].isdigit():
+            start = self.pos
+            while self.pos < self.length and self.text[self.pos].isdigit():
+                self.pos += 1
+            number_value = self.text[start:self.pos]
 
-        if number_match:
-            value = number_match.group(0)
-            self.pos += len(value)
-            return Token(TokenType.NUMBER, value, self.pos)
+            # Перевірка на DOT після числа
+            if self.pos < self.length and self.text[self.pos] == ".":
+                self.pos += 1
+                return Token(TokenType.NUMBER, number_value, start)  # спочатку NUMBER
+            return Token(TokenType.NUMBER, number_value, start)
 
         # --- TEXT ---
         start = self.pos

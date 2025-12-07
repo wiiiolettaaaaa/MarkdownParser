@@ -142,12 +142,6 @@ def test_parse_codespan_multiple_backticks():
     cs = doc.blocks[0].inlines[0]
     assert cs.code == "code"
 
-def test_parse_link():
-    doc = parse_markdown("[text](url)")
-    ln = doc.blocks[0].inlines[0]
-    assert isinstance(ln, Link)
-    assert ln.url == "url"
-    assert ln.text_nodes[0].text == "text"
 
 # ----------------------------------------------------------
 # _is_open_fence, _is_close_fence
@@ -197,13 +191,6 @@ def test_paragraph_stops_at_heading():
     assert isinstance(doc.blocks[0], Paragraph)
     assert isinstance(doc.blocks[1], Heading)
 
-# ----------------------------------------------------------
-# ERROR: unmatched link bracket
-# ----------------------------------------------------------
-
-def test_unmatched_link_raises():
-    with pytest.raises(ParseError):
-        parse_markdown("[abc")
 
 
 

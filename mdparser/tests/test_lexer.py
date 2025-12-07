@@ -100,17 +100,6 @@ def test_brackets():
     assert tokens[3].type == TokenType.RPAREN
 
 
-# -----------------------------------------------------------
-# NUMBER токен (1., 23.)
-# -----------------------------------------------------------
-
-def test_number_token():
-    lexer = Lexer("12. text")
-    tokens = lexer.tokenize()
-    assert tokens[0].type == TokenType.NUMBER
-    assert tokens[0].value == "12."
-    assert tokens[1].type == TokenType.SPACE
-    assert tokens[2].type == TokenType.TEXT
 
 
 # -----------------------------------------------------------

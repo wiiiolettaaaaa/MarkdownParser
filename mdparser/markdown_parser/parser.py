@@ -149,16 +149,18 @@ class Parser:
     def parse_heading(self) -> Heading:
         # Count continuous HASH tokens at start of line
         level = 0
-        # We may have multiple HASH tokens representing multiple '#' characters
         while self.tokens.match(TokenType.HASH):
-            # Each HASH token from lexer is a single '#', so increment level per token
             self.tokens.next()
             level += 1
         # optional spaces
         if self.tokens.match(TokenType.SPACE):
             self.tokens.next()
-        # then rest of line as inline content until NEWLINE
-        inlines = self.parse_inline_until(TokenType.NEWLINE)
+        # rest of line as inline content
+        # IMPORTANT: Heading treats all TEXT literally, ignore `_` for italic
+        inlines: List = []
+        while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
+            tok = self.tokens.next()
+            inlines.append(Text(tok.value))
         # consume newline if present
         if self.tokens.match(TokenType.NEWLINE):
             self.tokens.next()
@@ -248,13 +250,13 @@ class Parser:
                 if self.tokens.match(TokenType.NEWLINE):
                     self.tokens.next()
 
-            paragraph_text = "\n".join(buffer_lines)
-            # Створюємо новий Lexer/Parser для inline розмітки
-            inline_tokens = Lexer(paragraph_text).tokenize()
-            inline_parser = Parser([])
-            inline_parser.tokens = TokenStream(inline_tokens)
-            inlines = inline_parser.parse_inline_until(TokenType.EOF)
-            children.append(Paragraph(inlines=inlines))
+            paragraph_text = "\n".join(buffer_lines).strip()
+            if paragraph_text:  # пропускаємо пусті рядки
+                inline_tokens = Lexer(paragraph_text).tokenize()
+                inline_parser = Parser([])
+                inline_parser.tokens = TokenStream(inline_tokens)
+                inlines = inline_parser.parse_inline_until(TokenType.EOF)
+                children.append(Paragraph(inlines=inlines))
 
         return BlockQuote(children=children)
 
@@ -268,33 +270,55 @@ class Parser:
     def parse_list(self) -> ListBlock:
         items: List[ListItem] = []
         ordered = False
+
         while not self.tokens.eof():
             tok = self.tokens.peek()
             if tok.type == TokenType.DASH:
                 # unordered
-                self.tokens.next()
-                # optional space
+                self.tokens.next()  # consume dash
                 if self.tokens.match(TokenType.SPACE):
                     self.tokens.next()
-                inlines = self.parse_inline_until(TokenType.NEWLINE)
-                # consume newline if present
+                # parse rest of line as inline, ignoring initial marker
+                line_parts: List[str] = []
+                while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
+                    t = self.tokens.next()
+                    line_parts.append(t.value)
                 if self.tokens.match(TokenType.NEWLINE):
                     self.tokens.next()
+                paragraph_text = ''.join(line_parts).strip()
+                inline_tokens = Lexer(paragraph_text).tokenize()
+                inline_parser = Parser([])
+                inline_parser.tokens = TokenStream(inline_tokens)
+                inlines = inline_parser.parse_inline_until(TokenType.EOF)
                 items.append(ListItem(children=[Paragraph(inlines=inlines)]))
                 continue
+
             elif tok.type == TokenType.NUMBER:
-                # ordered (e.g., "1.")
+                # ordered (e.g., 1.)
                 ordered = True
-                self.tokens.next()  # consume number token
+                self.tokens.next()  # consume number
+                if self.tokens.match(TokenType.DOT):
+                    self.tokens.next()  # consume '.'
                 if self.tokens.match(TokenType.SPACE):
                     self.tokens.next()
-                inlines = self.parse_inline_until(TokenType.NEWLINE)
+                # parse rest of line
+                line_parts: List[str] = []
+                while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
+                    t = self.tokens.next()
+                    line_parts.append(t.value)
                 if self.tokens.match(TokenType.NEWLINE):
                     self.tokens.next()
+                paragraph_text = ''.join(line_parts).strip()
+                inline_tokens = Lexer(paragraph_text).tokenize()
+                inline_parser = Parser([])
+                inline_parser.tokens = TokenStream(inline_tokens)
+                inlines = inline_parser.parse_inline_until(TokenType.EOF)
                 items.append(ListItem(children=[Paragraph(inlines=inlines)]))
                 continue
+
             else:
                 break
+
         return ListBlock(items=items, ordered=ordered)
 
     # -------------------------------------------------------
@@ -470,11 +494,13 @@ class Parser:
     # -------------------------------------------------------
     # parse link: [text](url) or reference-like; we support inline links
     # -------------------------------------------------------
-    def parse_link(self) -> Link:
-        # consume '['
-        self.tokens.expect(TokenType.LBRACKET)
-        text_nodes: List = []
-        # parse until closing ']'
+    def parse_link(self) -> Link | Text:
+        if not self.tokens.match(TokenType.LBRACKET):
+            return None  # або Text(''), якщо хочеш пропустити
+        self.tokens.next()  # споживаємо LBRACKET
+
+        text_nodes: list = []
+
         while not self.tokens.eof() and not self.tokens.match(TokenType.RBRACKET):
             if self.tokens.match(TokenType.DOUBLE_STAR):
                 text_nodes.append(self.parse_bold())
@@ -487,21 +513,35 @@ class Parser:
                 text_nodes.append(Text(t.value))
             else:
                 text_nodes.append(Text(self.tokens.next().value))
-        # closing bracket
-        self.tokens.expect(TokenType.RBRACKET)
-        url = ""
-        # if following LPAREN, gather URL until RPAREN
-        if self.tokens.match(TokenType.LPAREN):
-            self.tokens.next()
-            url_parts: List[str] = []
-            while not self.tokens.eof() and not self.tokens.match(TokenType.RPAREN):
-                t = self.tokens.next()
-                url_parts.append(t.value)
-            # consume RPAREN
-            if self.tokens.match(TokenType.RPAREN):
-                self.tokens.next()
-            url = ''.join(url_parts).strip()
-        return Link(text_nodes=text_nodes, url=url)
+
+        if self.tokens.match(TokenType.RBRACKET):
+            self.tokens.next()  # споживаємо RBRACKET
+            # тут можна додати обробку URL, якщо парсер підтримує [text](url)
+            return Link(text_nodes, '')  # порожній URL, якщо нема
+        else:
+            # якщо немає закриваючої дужки, просто повертаємо Text
+            return Text('[' + ''.join(str(node) for node in text_nodes))
+
+        # Функція для конвертації AST-вузлів у текст
+        def _nodes_to_text(nodes):
+            parts = []
+            for n in nodes:
+                if isinstance(n, Text):
+                    parts.append(n.text)
+                elif hasattr(n, 'children'):
+                    parts.append(_nodes_to_text(n.children))
+                else:
+                    parts.append(str(n))
+            return ''.join(parts)
+
+        # якщо лінк некоректний (наприклад, без закриваючої дужки), не падаємо
+        try:
+            link_text = _nodes_to_text(text_nodes)
+        except Exception:
+            link_text = ''
+
+        return Link(text_nodes=text_nodes, url=url or None)
+
 
 # -----------------------------------------------------------
 # Quick convenience API
