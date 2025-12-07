@@ -3,10 +3,10 @@ import sys
 import os
 from typing import Optional
 
-from markdown_parser.lexer import Lexer
-from markdown_parser.parser import Parser
-from markdown_parser.renderer import HTMLRenderer
-from markdown_parser.cache import (
+from mdparser.markdown_parser.lexer import Lexer
+from mdparser.markdown_parser.parser import Parser
+from mdparser.markdown_parser.renderer import HTMLRenderer
+from mdparser.markdown_parser.cache import (
     CacheManager,
     LRUCache,
     LFUCache,
