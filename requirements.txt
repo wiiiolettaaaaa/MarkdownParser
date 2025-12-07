@@ -2,4 +2,3 @@ pytest
 pytest-cov
 psutil
 hypothesis
-pytest test_golden_master.py --snapshot-update -q
