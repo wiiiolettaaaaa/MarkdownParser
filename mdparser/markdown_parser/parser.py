@@ -294,56 +294,25 @@ class Parser:
     # but paragraph-level inlines are parsed in list items.
     # -------------------------------------------------------
     def parse_list(self) -> ListBlock:
-        items: List[ListItem] = []
-        ordered = False
+        items = []
+        ordered = self.tokens.peek().type == TokenType.NUMBER
 
-        while not self.tokens.eof():
-            tok = self.tokens.peek()
-            if tok.type == TokenType.DASH:
-                # unordered
-                self.tokens.next()  # consume dash
-                if self.tokens.match(TokenType.SPACE):
-                    self.tokens.next()
-                # parse rest of line as inline, ignoring initial marker
-                line_parts: List[str] = []
-                while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
-                    t = self.tokens.next()
-                    line_parts.append(t.value)
-                if self.tokens.match(TokenType.NEWLINE):
-                    self.tokens.next()
-                paragraph_text = ''.join(line_parts).strip()
-                inline_tokens = Lexer(paragraph_text).tokenize()
-                inline_parser = Parser([])
-                inline_parser.tokens = TokenStream(inline_tokens)
-                inlines = inline_parser.parse_inline_until(TokenType.EOF)
-                items.append(ListItem(children=[Paragraph(inlines=inlines)]))
-                continue
+        while not self.tokens.eof() and (self.tokens.match(TokenType.DASH) or self.tokens.match(TokenType.NUMBER)):
+            marker = self.tokens.next()  # споживаємо маркер списку (- або число)
 
-            elif tok.type == TokenType.NUMBER:
-                # ordered (e.g., 1.)
-                ordered = True
-                self.tokens.next()  # consume number
-                if self.tokens.match(TokenType.DOT):
-                    self.tokens.next()  # consume '.'
-                if self.tokens.match(TokenType.SPACE):
-                    self.tokens.next()
-                # parse rest of line
-                line_parts: List[str] = []
-                while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
-                    t = self.tokens.next()
-                    line_parts.append(t.value)
-                if self.tokens.match(TokenType.NEWLINE):
-                    self.tokens.next()
-                paragraph_text = ''.join(line_parts).strip()
-                inline_tokens = Lexer(paragraph_text).tokenize()
-                inline_parser = Parser([])
-                inline_parser.tokens = TokenStream(inline_tokens)
-                inlines = inline_parser.parse_inline_until(TokenType.EOF)
-                items.append(ListItem(children=[Paragraph(inlines=inlines)]))
-                continue
+            # Пропускаємо пробіл після маркера
+            if self.tokens.match(TokenType.SPACE):
+                self.tokens.next()
 
-            else:
-                break
+            # Парсимо рядок як inlines до кінця рядка
+            inlines: List = self.parse_inline_until(TokenType.NEWLINE)
+
+            paragraph = Paragraph(inlines=inlines)
+            items.append(ListItem(children=[paragraph]))
+
+            # Пропускаємо newline після елемента
+            if self.tokens.match(TokenType.NEWLINE):
+                self.tokens.next()
 
         return ListBlock(items=items, ordered=ordered)
 
