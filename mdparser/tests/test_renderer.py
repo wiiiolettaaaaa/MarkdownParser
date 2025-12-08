@@ -24,52 +24,45 @@ def T(x): return Text(x)
 # HTML RENDERER TESTS
 # ===========================================================
 
+
 def test_html_empty_document():
     doc = Document(blocks=[])
-    r = HTMLRenderer()
-    assert r.render(doc) == ""
+    out = render_html(doc)
+    assert out == ""
 
 
 def test_html_paragraph():
     doc = Document(blocks=[Paragraph(inlines=[T("hello")])])
-    out = HTMLRenderer().render(doc)
-    assert out.strip() == "<p>hello</p>"
+    expected = "<p>hello</p>\n"
+    assert render_html(doc) == expected
 
 
 def test_html_heading_levels_clamped():
     doc = Document(blocks=[Heading(level=99, inlines=[T("X")])])
-    out = HTMLRenderer().render(doc)
-    assert "<h6>X</h6>" in out
+    expected = "<h6>X</h6>\n"
+    assert render_html(doc) == expected
 
 
 def test_html_bold_italic():
     doc = Document(blocks=[
-        Paragraph(inlines=[
-            T("A "),
-            Bold(children=[T("B")]),
-            T(" "),
-            Italic(children=[T("C")])
-        ])
+        Paragraph(inlines=[T("A "), Bold(children=[T("B")]), T(" "), Italic(children=[T("C")])])
     ])
-    out = render_html(doc)
-    assert "<strong>B</strong>" in out
-    assert "<em>C</em>" in out
+    expected = "<p>A <strong>B</strong> <em>C</em></p>\n"
+    assert render_html(doc) == expected
 
 
 def test_html_link():
     doc = Document(blocks=[
-        Paragraph(inlines=[
-            Link(url="https://x.y", text_nodes=[T("site")])
-        ])
+        Paragraph(inlines=[Link(url="https://x.y", text_nodes=[T("site")])])
     ])
-    out = render_html(doc)
-    assert '<a href="https://x.y">site</a>' in out
+    expected = '<p><a href="https://x.y">site</a></p>\n'
+    assert render_html(doc) == expected
 
 
 def test_html_escape_text():
     doc = Document(blocks=[Paragraph(inlines=[T("<x> &")])])
-    out = render_html(doc)
-    assert "&lt;x&gt;" in out and "&amp;" in out
+    expected = "<p>&lt;x&gt; &amp;</p>\n"
+    assert render_html(doc) == expected
 
 
 def test_html_list_unordered():
@@ -79,10 +72,13 @@ def test_html_list_unordered():
             ListItem(children=[Paragraph(inlines=[T("two")])]),
         ])
     ])
-    out = render_html(doc)
-    assert "<ul>" in out
-    assert "<li>one</li>" in out
-    assert "<li>two</li>" in out
+    expected = (
+        "<ul>\n"
+        "  <li>one</li>\n"
+        "  <li>two</li>\n"
+        "</ul>\n"
+    )
+    assert render_html(doc) == expected
 
 
 def test_html_list_ordered():
@@ -92,8 +88,13 @@ def test_html_list_ordered():
             ListItem(children=[Paragraph(inlines=[T("b")])]),
         ])
     ])
-    out = render_html(doc)
-    assert "<ol>" in out
+    expected = (
+        "<ol>\n"
+        "  <li>a</li>\n"
+        "  <li>b</li>\n"
+        "</ol>\n"
+    )
+    assert render_html(doc) == expected
 
 
 def test_html_nested_blocks():
@@ -103,37 +104,56 @@ def test_html_nested_blocks():
             Paragraph(inlines=[T("q2")])
         ])
     ])
-    out = render_html(doc)
-    assert "<blockquote>" in out
-    assert "q1" in out and "q2" in out
+    expected = (
+        "<blockquote>\n"
+        "  <p>q1</p>\n"
+        "  <p>q2</p>\n"
+        "</blockquote>\n"
+    )
+    assert render_html(doc) == expected
 
 
 def test_html_codeblock():
-    doc = Document(blocks=[
-        CodeBlock(code='x < y', language="py")
-    ])
-    out = render_html(doc)
-    assert "<pre><code class=\"language-py\">" in out
-    assert "x &lt; y" in out  # escaped
+    doc = Document(blocks=[CodeBlock(code='x < y', language="py")])
+    expected = '<pre><code class="language-py">x &lt; y</code></pre>\n'
+    assert render_html(doc) == expected
 
 
 def test_html_codespan():
     doc = Document(blocks=[Paragraph(inlines=[CodeSpan(code="x < y")])])
-    out = render_html(doc)
-    assert "<code>x &lt; y</code>" in out
+    expected = "<p><code>x &lt; y</code></p>\n"
+    assert render_html(doc) == expected
 
 
 def test_html_hr():
     doc = Document(blocks=[HorizontalRule()])
-    out = render_html(doc)
-    assert "<hr />" in out
+    expected = "<hr />\n"
+    assert render_html(doc) == expected
 
 
 def test_html_pretty_off():
     doc = Document(blocks=[Paragraph(inlines=[T("hi")])])
-    out = render_html(doc, pretty=False)
-    assert "\n" not in out
-    assert out == "<p>hi</p>"
+    expected = "<p>hi</p>"
+    assert render_html(doc, pretty=False) == expected
+
+
+def test_html_list_item_nested_block():
+    doc = Document(blocks=[
+        ListBlock(ordered=False, items=[
+            ListItem(children=[
+                Paragraph(inlines=[T("p")]),
+                CodeBlock(code="x", language=None)
+            ])
+        ])
+    ])
+    expected = (
+        "<ul>\n"
+        "  <li>p\n"
+        "<pre><code>x</code></pre>\n"
+        "  </li>\n"
+        "</ul>\n"
+    )
+    assert render_html(doc) == expected
 
 
 # ===========================================================

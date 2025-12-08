@@ -76,13 +76,24 @@ def test_parse_unordered_list():
     assert not lst.ordered
     assert len(lst.items) == 2
 
+
 def test_parse_ordered_list():
-    doc = parse_markdown("1. first\n2. second\n")
+    doc = parse_markdown("1. first\n2. second\n3. third\n")
     lst = doc.blocks[0]
-    assert lst.ordered
-    assert len(lst.items) == 2
 
+    # Це має бути ListBlock
+    assert isinstance(lst, ListBlock)
 
+    # ordered=True
+    assert lst.ordered is True
+
+    # 3 елементи
+    assert len(lst.items) == 3
+
+    # Перевірка текстів
+    assert lst.items[0].children[0].inlines[0].text == "first"
+    assert lst.items[1].children[0].inlines[0].text == "second"
+    assert lst.items[2].children[0].inlines[0].text == "third"
 # ----------------------------------------------------------
 # Horizontal rule
 # ----------------------------------------------------------
@@ -164,6 +175,49 @@ def test_close_fence_detection():
         p.tokens.next()
     assert p._is_close_fence(3)
 
+
+# ----------------------------------------------------------
+# BlockQuote tests
+# ----------------------------------------------------------
+
+def test_parse_blockquote_single_line():
+    md_text = "> This is a quote"
+    doc = parse_markdown(md_text)
+    assert len(doc.blocks) == 1
+    bq = doc.blocks[0]
+    assert isinstance(bq, BlockQuote)
+    assert len(bq.children) == 1
+    p = bq.children[0]
+    assert isinstance(p, Paragraph)
+    assert ''.join([t.text for t in p.inlines if isinstance(t, Text)]) == "This is a quote"
+
+def test_parse_blockquote_multiple_lines():
+    md_text = "> Line 1\n> Line 2\n> Line 3"
+    doc = parse_markdown(md_text)
+    bq = doc.blocks[0]
+    assert isinstance(bq, BlockQuote)
+    assert len(bq.children) == 1  # всі рядки зібрані в один параграф
+    p = bq.children[0]
+    # Текст має обʼєднати всі рядки через \n
+    text_content = ''.join([t.text for t in p.inlines if isinstance(t, Text)])
+    assert "Line 1" in text_content
+    assert "Line 2" in text_content
+    assert "Line 3" in text_content
+
+def test_parse_blockquote_with_formatting():
+    md_text = "> **Bold** and *Italic* text"
+    doc = parse_markdown(md_text)
+    bq = doc.blocks[0]
+    assert isinstance(bq, BlockQuote)
+    p = bq.children[0]
+    types = [type(n).__name__ for n in p.inlines]
+    assert "Bold" in types
+    assert "Italic" in types
+    # Перевіряємо, що текст всередині Bold і Italic коректний
+    bold_node = next(n for n in p.inlines if isinstance(n, Bold))
+    italic_node = next(n for n in p.inlines if isinstance(n, Italic))
+    assert bold_node.children[0].text == "Bold"
+    assert italic_node.children[0].text == "Italic"
 # ----------------------------------------------------------
 # parse_inline_until: mixed content
 # ----------------------------------------------------------
@@ -190,8 +244,6 @@ def test_paragraph_stops_at_heading():
     doc = parse_markdown("hello\n# title")
     assert isinstance(doc.blocks[0], Paragraph)
     assert isinstance(doc.blocks[1], Heading)
-
-
 
 
 def test_text_to_from_dict():

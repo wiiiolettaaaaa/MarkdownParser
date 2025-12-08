@@ -229,37 +229,63 @@ class Parser:
     # Our lexer currently includes '>' inside TEXT tokens; handle both cases.
     # -------------------------------------------------------
     def parse_blockquote(self) -> BlockQuote:
-        children: List[Paragraph] = []
+        buffer_lines = []
 
         while not self.tokens.eof():
-            tok = self.tokens.peek()
-            if tok.type != TokenType.TEXT or not tok.value.startswith('>'):
-                break
 
-            # Збираємо всі рядки blockquote в один буфер
-            buffer_lines: List[str] = []
-            while not self.tokens.eof():
-                line_tok = self.tokens.peek()
-                if line_tok.type != TokenType.TEXT or not line_tok.value.startswith('>'):
-                    break
-                line = line_tok.value[1:]  # видаляємо '>'
-                if line.startswith(" "):
-                    line = line[1:]
-                buffer_lines.append(line)
+            tok = self.tokens.peek()
+
+            if tok.type == TokenType.TEXT and tok.value.startswith(">"):
                 self.tokens.next()
+
+                if self.tokens.match(TokenType.SPACE):
+                    self.tokens.next()
+
+                # collect line until newline
+                line_parts = []
+                while not self.tokens.eof() and not self.tokens.match(TokenType.NEWLINE):
+                    part = self.tokens.next()
+                    if part.type == TokenType.TEXT:
+                        line_parts.append(part.value)
+                    else:
+                        line_parts.append(part.value)
+
+                line = "".join(line_parts)
+                buffer_lines.append(line)
+
+                # consume newline if any
                 if self.tokens.match(TokenType.NEWLINE):
                     self.tokens.next()
 
-            paragraph_text = "\n".join(buffer_lines).strip()
-            if paragraph_text:  # пропускаємо пусті рядки
-                inline_tokens = Lexer(paragraph_text).tokenize()
-                inline_parser = Parser([])
-                inline_parser.tokens = TokenStream(inline_tokens)
-                inlines = inline_parser.parse_inline_until(TokenType.EOF)
-                children.append(Paragraph(inlines=inlines))
+                continue
 
-        return BlockQuote(children=children)
+            # Case 2: TEXT token starting with '>'
+            if tok.type == TokenType.TEXT and tok.value.startswith(">"):
+                raw = self.tokens.next().value
+                line = raw[1:]
+                if line.startswith(" "):
+                    line = line[1:]
+                buffer_lines.append(line)
 
+                if self.tokens.match(TokenType.NEWLINE):
+                    self.tokens.next()
+                continue
+
+            break
+
+        # if nothing collected
+        if not buffer_lines:
+            return BlockQuote(children=[])
+
+        # join lines with \n as tests expect
+        paragraph_text = "\n".join(buffer_lines)
+
+        # parse inline content
+        inline_tokens = Lexer(paragraph_text).tokenize()
+        inline_parser = Parser(inline_tokens)
+        inlines = inline_parser.parse_inline_until(TokenType.EOF)
+
+        return BlockQuote(children=[Paragraph(inlines=inlines)])
 
 
     # -------------------------------------------------------
